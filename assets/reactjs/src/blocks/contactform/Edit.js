@@ -1,7 +1,15 @@
+/* eslint-disable react/react-in-jsx-scope */
 const { __ } = wp.i18n;
 const { InspectorControls, BlockControls } = wp.blockEditor
 const { Component, Fragment, createRef } = wp.element;
-const { PanelBody, TextControl, TextareaControl, Toolbar, Button } = wp.components;
+const {
+    PanelBody,
+    TextControl,
+    TextareaControl,
+    Toolbar,
+    Button,
+    Notice
+} = wp.components;
 const {
     Styles,
     Range,
@@ -30,7 +38,7 @@ const {
     InspectorTab
 } = wp.qubelyComponents
 
-import icons from '../../helpers/icons'
+import icons from '../../helpers/icons';
 
 
 class Edit extends Component {
@@ -430,6 +438,11 @@ class Edit extends Component {
                                             onChange={val => setAttributes({ emailFrom: val })}
                                             placeholder={__('Your Name: admin@example.com')}
                                         />
+                                        <Notice status="warning" isDismissible={false}>
+                                            {__("Please use your site's email, to avoid any error.")}
+                                            <br />
+                                            {__("if your site is example.com, the email should be anything@example.com")}
+                                        </Notice>
                                         <TextControl
                                             label={__('Subject')}
                                             value={emailSubject}
@@ -440,7 +453,7 @@ class Edit extends Component {
                                             label={__('Email Body')}
                                             value={emailBody}
                                             onChange={val => setAttributes({ emailBody: val })}
-                                            help={__("Set your form email body here. In editor don't add any CSS style or others option just add your form field name between double curly braces {{field-name}} as you set in 'Field Name'.")}
+                                            help={__('Set your form email body here. In editor don\'t add any CSS style or others option just add your form field name between double curly braces {{field-name}} as you set in \'Field Name\'.')}
                                         />
                                     </Tab>
                                 </Tabs>
@@ -516,7 +529,7 @@ class Edit extends Component {
 
                         <div
                             ref={this.qubelyContextMenu}
-                            className={`qubely-context-menu-wraper`}
+                            className={'qubely-context-menu-wraper'}
                         >
                             <ContextMenu
                                 name={name}

@@ -19,6 +19,7 @@ registerBlockType('qubely/buttongroup', {
     icon: <img src={qubely_admin.plugin + 'assets/img/blocks/block-button-group.svg'} alt={__('Button Group Block')} className="qubely-block-icon small"/>,
     supports: {
         align: ['center', 'wide', 'full'],
+        html: false,
     },
     keywords: [
         __('button'),
@@ -37,7 +38,20 @@ registerBlockType('qubely/buttongroup', {
                 unit: "px"
             }
         },
-
+        innerBlocks: [
+            {
+                name: 'qubely/button',
+                attributes: {
+                    textField: 'Button one',
+                },
+            },
+            {
+                name: 'qubely/button',
+                attributes: {
+                    textField: 'Button two',
+                },
+            }
+        ],
     },
     attributes,
     edit: Edit,
