@@ -28,6 +28,35 @@
 					display: block;
 				}
 			}
+			.description-type-tab {
+				display: inline-flex;
+				justify-content: center;
+				align-items: center;
+				&.nav-layout-one {
+					flex-direction: column;
+					&.align-left{
+						align-items: flex-start;
+					}
+					&.align-center{
+						align-items: center;
+					}
+					&.align-right{
+						align-items: flex-end;
+					}
+				}
+				.qubely-tab-description {
+					width: 100%;
+				}
+			}
+			.progress {
+				position: absolute;
+				&.bottom {
+					bottom: 0;
+				}
+				&.top {
+					top: 0;
+				}
+			}
 		}
 
 		&.qubely-alignment-left {
