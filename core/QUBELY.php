@@ -65,6 +65,8 @@ class QUBELY {
 		 add_action( 'wp_ajax_qubely_send_form_data', array( $this, 'qubely_send_form_data' ) );
 		 add_action( 'wp_ajax_nopriv_qubely_send_form_data', array( $this, 'qubely_send_form_data' ) );
 
+		 add_action( 'wp_ajax_qubely_add_to_cart', array( $this, 'qubely_add_to_cart' ) );
+		 add_action( 'wp_ajax_nopriv_qubely_add_to_cart', array( $this, 'qubely_add_to_cart' ) );
 		 // dynamic blocks
 		 add_action( 'init', array( $this, 'init_dynamic_blocks' ) );
 
@@ -206,10 +208,11 @@ class QUBELY {
 				'qubely_recaptcha_secret_key' => $qubely_recaptcha_secret_key,
 				'site_url'                    => site_url(),
 				'admin_url'                   => admin_url(),
-				'actual_url'                  => str_replace( $protocols, '', site_url() ),
+				'actual_url'                  => str_replace($protocols, '', site_url()),
 				'import_with_global_settings' => $enable_global_settings,
 				'publishedPosts'              => wp_count_posts()->publish,
 				'mc_key'                      => $mc_key,
+				'is_core_active'              => is_plugin_active('qubely-core/qubely-core.php'),
 			)
 		);
 	}
@@ -249,6 +252,218 @@ class QUBELY {
 		return $dividerArray;
 	}
 
+	/**
+	 * Parse all blocks
+	 * 
+	 * 	 * @since 1.6.5
+	 */
+	public function parse_all_blocks(){
+		$blocks;
+		if (is_single() || is_page() || is_404()) {
+			global $post;
+			if (is_object($post) && property_exists($post, 'post_content')) {
+				$blocks = parse_blocks($post->post_content);
+			}
+		} elseif (is_archive() || is_home() || is_search()) {
+			global $wp_query;
+			foreach ($wp_query as $post) {
+				if (is_object($post) && property_exists($post, 'post_content')) {
+					$blocks = parse_blocks($post->post_content);
+				}
+			}
+		}
+		return $blocks;
+	}
+	/**
+	 * Load font-awesome CSS
+	 * 
+	 * 	 * @since 1.6.5
+	 */
+	public function qubely_load_fontawesome(){
+		$option_data = get_option('qubely_options');
+		$load_font_awesome = isset($option_data['load_font_awesome_CSS']) ? $option_data['load_font_awesome_CSS'] : 'yes';
+		if ($load_font_awesome == 'yes') {
+			$blocks = $this->parse_all_blocks();
+			$contains_qubely_blocks = $this->has_blocks_with_fontawesome($blocks);
+			if ($contains_qubely_blocks) {
+				wp_enqueue_style('qubely-font-awesome', QUBELY_DIR_URL . 'assets/css/font-awesome.min.css', false, QUBELY_VERSION);
+			}
+		}
+	}
+
+	public function colsFromArray(array $array, $keys) {
+		if (!is_array($keys)) $keys = [$keys];
+		return array_map(function ($el) use ($keys) {
+			$o = [];
+			foreach($keys as $key){
+				//  if(isset($el[$key]))$o[$key] = $el[$key]; //you can do it this way if you don't want to set a default for missing keys.
+				$o[$key] = isset($el[$key])?$el[$key]:false;
+			}
+			return $o;
+		}, $array);
+	}
+
+	/**
+	 * Get block google fonts
+	 */
+	public function gather_block_fonts($blocks,$block_fonts){
+		$google_fonts = $block_fonts;
+		foreach ($blocks as $key => $block) {
+			if (strpos($block['blockName'], 'qubely') !== false) {
+				foreach ($block['attrs'] as $key =>  $att) {
+					if (gettype($att) == 'array' && isset($att['openTypography']) && isset($att['family'])) {
+						if (isset($block['attrs'][$key]['activeSource'])) {
+							if ($block['attrs'][$key]['activeSource'] == 'custom') {
+								array_push($google_fonts,$block['attrs'][$key]['family']);
+							}
+						} else {
+							array_push($google_fonts,$block['attrs'][$key]['family']);
+						}
+					}
+				}
+			}
+			if(isset($block['innerBlocks']) && gettype($block['innerBlocks']) == 'array' && count($block['innerBlocks'])>0){
+				$child_fonts=$this->gather_block_fonts($block['innerBlocks'],$google_fonts);
+				if(count($child_fonts)>0){
+				$google_fonts=	array_merge($google_fonts,$child_fonts);
+				}
+			}
+		}
+		return array_unique($google_fonts);
+	}
+	/**
+	 * Check whether post contains
+	 * any qubely blocks
+	 */
+	public function has_qubely_blocks($blocks){
+		$is_qubely_block = false;
+		foreach ($blocks as $key => $block) {
+			if (strpos($block['blockName'], 'qubely') !== false) {
+				$is_qubely_block = true;
+			}
+			if (isset($block['innerBlocks']) && gettype($block['innerBlocks']) == 'array' && count($block['innerBlocks']) > 0) {
+				$is_qubely_block = $this->has_qubely_blocks($block['innerBlocks']);
+			}
+		}
+		return $is_qubely_block;
+	}
+
+	/**
+	 * Check whether post contains
+	 * any qubely blocks with Font-awesome
+	 */
+	public function has_blocks_with_fontawesome($blocks){
+		$has_fontawesome_block = false;
+		$target_blocks = array(
+			'qubely/icon',
+			'qubely/accordion',
+			'qubely/advancedlist',
+			'qubely/iconlist',
+			'qubely/infobox',
+			'qubely/pricing',
+			'qubely/socialicons',
+			'qubely/tabs',
+			'qubely/timeline', 
+			'qubely/testimonial',
+			'qubely/team',
+			'qubely/woocarousel',
+			'qubely/testimonialcarousel',
+			'qubely/teamcarousel',
+			'qubely/table',
+			'qubely/postcarousel', 
+			'qubely/imagecarousel',
+			'qubely/verticaltabs',
+			'qubely/form',
+			'qubely/button',
+			'qubely/buttongroup',
+			'qubely/table-of-contents',
+			'qubely/videopopup',
+			'qubely/table',
+			'qubely/pieprogress',
+			'qubely/wooproducts',
+			'qubely/postgrid',
+			'qubely/contactform',
+
+		);
+		foreach ($blocks as $key => $block) {
+			if (in_array($block['blockName'], $target_blocks, true)) {
+				$has_fontawesome_block = true;
+			}
+			if ($has_fontawesome_block==false && isset($block['innerBlocks']) && gettype($block['innerBlocks']) == 'array' && count($block['innerBlocks']) > 0) {
+				$has_fontawesome_block = $this->has_blocks_with_fontawesome($block['innerBlocks']);
+			}
+		}
+		return $has_fontawesome_block;
+	}
+	/**
+	 * Load Google fonts
+	 * 
+	 * 	 * @since 1.6.5
+	 */
+	public function qubely_load_googlefonts(){
+		//Global settings fonts
+		$blocks;
+		$contains_qubely_blocks = false;
+		$block_fonts = [];
+		$option_data = get_option('qubely_options');
+		$load_google_fonts = isset($option_data['load_google_fonts']) ? $option_data['load_google_fonts'] : 'yes';
+
+		if ($load_google_fonts == 'yes') {
+			$blocks=$this->parse_all_blocks();
+			$contains_qubely_blocks = $this->has_qubely_blocks($blocks);
+
+			if ($contains_qubely_blocks) {
+				$block_fonts = $this->gather_block_fonts($blocks, $block_fonts);
+				$global_settings = get_option($this->option_keyword);
+				$global_settings = $global_settings == false ? json_decode('{}') : json_decode($global_settings);
+				$global_settings = json_decode(json_encode($global_settings), true);
+				$gfonts = '';
+				$all_global_fonts = array();
+				if (isset($global_settings['presets']) && isset($global_settings['presets'][$global_settings['activePreset']]) && isset($global_settings['presets'][$global_settings['activePreset']]['typography'])) {
+					$all_global_fonts = $this->colsFromArray(array_column($global_settings['presets'][$global_settings['activePreset']]['typography'], 'value'), ['family', 'weight']);
+				}
+				if (count($all_global_fonts) > 0) {
+					$global_fonts = array_column($all_global_fonts, 'family');
+
+					$all_fonts = array_unique(array_merge($global_fonts, $block_fonts));
+
+					if (!empty($all_fonts)) {
+						$system = array(
+							'Arial',
+							'Tahoma',
+							'Verdana',
+							'Helvetica',
+							'Times New Roman',
+							'Trebuchet MS',
+							'Georgia',
+						);
+
+						$gfonts_attr = ':100,100italic,200,200italic,300,300italic,400,400italic,500,500italic,600,600italic,700,700italic,800,800italic,900,900italic';
+
+						foreach ($all_fonts as $font) {
+							if (!in_array($font, $system, true) && !empty($font)) {
+								$gfonts .= str_replace(' ', '+', trim($font)) . $gfonts_attr . '|';
+							}
+						}
+					}
+
+					if (!empty($gfonts)) {
+						$query_args = array(
+							'family' => $gfonts,
+						);
+
+						wp_register_style(
+							'qubely-google-fonts',
+							add_query_arg($query_args, '//fonts.googleapis.com/css'),
+							array(),
+							QUBELY_VERSION
+						);
+						wp_enqueue_style('qubely-google-fonts');
+					}
+				}
+			}
+		}
+	}
 
 	/**
 	 * Admin Style & Script
@@ -256,7 +471,7 @@ class QUBELY {
 	 * @since 1.0.0
 	 */
 	public function qubely_admin_assets() {
-		 wp_register_script( 'qubely_local_script', '' );
+		wp_register_script( 'qubely_local_script', '' );
 		wp_localize_script(
 			'qubely_local_script',
 			'qubely_urls',
@@ -275,7 +490,8 @@ class QUBELY {
 		wp_enqueue_style( 'qubely-style-min', QUBELY_DIR_URL . 'assets/css/style.min.css', false, QUBELY_VERSION );
 		#END_REPLACE
 
-		wp_enqueue_style( 'font-awesome', QUBELY_DIR_URL . 'assets/css/font-awesome.min.css', false, QUBELY_VERSION );
+		wp_enqueue_style('qubely-font-awesome', QUBELY_DIR_URL . 'assets/css/font-awesome.min.css', false, QUBELY_VERSION);
+
 		wp_enqueue_script( 'qubely-magnific-popup', QUBELY_DIR_URL . 'assets/js/qubely.magnific-popup.js', array( 'jquery' ), QUBELY_VERSION, true );
 		wp_enqueue_script( 'jquery-animatedHeadline', QUBELY_DIR_URL . 'assets/js/jquery.animatedheadline.js', array( 'jquery' ), QUBELY_VERSION, true );
 		wp_enqueue_script( 'qubely-block-map', QUBELY_DIR_URL . 'assets/js/blocks/map.js', array( 'jquery' ), QUBELY_VERSION, true );
@@ -425,19 +641,23 @@ class QUBELY {
 			wp_enqueue_style( 'qubely-style-min', QUBELY_DIR_URL . 'assets/css/style.min.css', false, QUBELY_VERSION );
 			#END_REPLACE
 
-			wp_enqueue_style( 'qubely-font-awesome', QUBELY_DIR_URL . 'assets/css/font-awesome.min.css', false, QUBELY_VERSION );
+
+			$this->qubely_load_fontawesome(); 
+			$this->qubely_load_googlefonts(); 
 		}
 	}
 
 	public function qubely_enqueue_scripts() {
 		wp_register_script( 'qubely_local_script', '' );
+		$protocols                   = array( 'http://', 'https://', 'http://www', 'https://www', 'www' );
 		wp_localize_script(
 			'qubely_local_script',
 			'qubely_urls',
 			array(
 				'plugin' => QUBELY_DIR_URL,
-				'ajax'   => admin_url( 'admin-ajax.php' ),
-				'nonce'  => wp_create_nonce( 'qubely_nonce' ),
+				'ajax'   => admin_url('admin-ajax.php'),
+				'nonce'  => wp_create_nonce('qubely_nonce'),
+				'actual_url' => str_replace($protocols, '', site_url()),
 			)
 		);
 		wp_enqueue_script( 'qubely_local_script' );
@@ -525,21 +745,26 @@ class QUBELY {
 	 *
 	 * @since 1.3.0
 	 */
-	public function qubely_inline_footer_scripts() {        ?>
-		<script>
-			// Set Preview CSS
-			document.addEventListener("DOMContentLoaded", function() {
-				const cussrent_url = window.location.href;
-				if (cussrent_url.includes('preview=true')) {
-					let cssInline = document.createElement('style');
-					cssInline.type = 'text/css';
-					cssInline.id = 'qubely-block-js-preview';
-					cssInline.innerHTML =JSON.parse( localStorage.getItem('qubelyCSS'));
-					window.document.getElementsByTagName("head")[0].appendChild(cssInline);
-				}
-			})
-		</script>
-		<?php
+	public function qubely_inline_footer_scripts() {       
+		global $wp_query;	 
+		$is_previewing= $wp_query->is_preview();
+		if($is_previewing){
+			?>
+			<script>
+				// Set Preview CSS
+				document.addEventListener("DOMContentLoaded", function() {
+					const cussrent_url = window.location.href;
+					if (cussrent_url.includes('preview=true')) {
+						let cssInline = document.createElement('style');
+						cssInline.type = 'text/css';
+						cssInline.id = 'qubely-block-js-preview';
+						cssInline.innerHTML =JSON.parse( localStorage.getItem('qubelyCSS'));
+						window.document.getElementsByTagName("head")[0].appendChild(cssInline);
+					}
+				})
+			</script>
+			<?php
+		}
 	}
 
 	/**
@@ -633,6 +858,20 @@ class QUBELY {
 				array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'update_global_option' ),
+					'permission_callback' => function () {
+						return current_user_can( 'edit_posts' );
+					},
+					'args'                => array(),
+				),
+			)
+		);
+		register_rest_route(
+			'qubely/v1',
+			'/get_saved_preset/',
+			array(
+				array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'get_saved_preset' ),
 					'permission_callback' => function () {
 						return current_user_can( 'edit_posts' );
 					},
@@ -785,6 +1024,23 @@ class QUBELY {
 		}
 	}
 
+	public function get_saved_preset( $request ) {
+		$params = $request->get_params();
+		try {
+			if ( isset( $params['postId'] ) ) {
+				return array(
+					'success' => true,
+					'saved_preset'    => get_post_meta($params['postId'], '__qubely_global_settings', true),
+					'message' => 'Saved preset Successfully retrieved!!',
+				);
+			}
+		} catch ( Exception $e ) {
+			return array(
+				'success' => false,
+				'message' => $e->getMessage(),
+			);
+		}
+	}
 	public function qubely_get_content( $request ) {
 		$params = $request->get_params();
 		try {
@@ -1146,6 +1402,7 @@ class QUBELY {
 		}
 	}
 
+
 	/**
 	 * on Preview
 	 * enqueue static CSS 
@@ -1160,8 +1417,10 @@ class QUBELY {
 		wp_enqueue_style( 'qubely-magnific-popup-style', QUBELY_DIR_URL . 'assets/css/magnific-popup.css', false, QUBELY_VERSION );
 		wp_enqueue_style( 'qubely-style-min', QUBELY_DIR_URL . 'assets/css/style.min.css', false, QUBELY_VERSION );
 		#END_REPLACE
-		wp_enqueue_style( 'font-awesome', QUBELY_DIR_URL . 'assets/css/font-awesome.min.css', false, QUBELY_VERSION );
-		
+
+		$this->qubely_load_fontawesome();
+
+
 		//Scripts
 		wp_enqueue_script( 'qubely-magnific-popup', QUBELY_DIR_URL . 'assets/js/qubely.magnific-popup.js', array( 'jquery' ), QUBELY_VERSION, true );
 		wp_enqueue_script( 'jquery-animatedHeadline', QUBELY_DIR_URL . 'assets/js/jquery.animatedheadline.js', array( 'jquery' ), QUBELY_VERSION, true );
@@ -1617,6 +1876,23 @@ class QUBELY {
 			$responseData['status'] = 0;
 			$responseData['msg']    = $e->getMessage();
 			wp_send_json_error( $responseData );
+		}
+	}
+	/**
+	 * Ajax add to cart button 
+	 *
+	 * @return boolean,void     Return false if failure, echo json on success
+	 */
+	public function qubely_add_to_cart()
+	{
+		try {
+			$responseData['status'] = 1;
+			WC()->cart->add_to_cart($_POST['id'], 1);
+			wp_send_json_success($responseData);
+		} catch (\Exception $e) {
+			$responseData['status'] = 0;
+			$responseData['msg']    = $e->getMessage();
+			wp_send_json_error($responseData);
 		}
 	}
 }

@@ -449,7 +449,7 @@ class Edit extends Component {
                                 />
                             </PanelBody>
 
-                            <PanelBody title={__('Smooth Scroll')}>
+                            <PanelBody title={__('Smooth Scroll')} initialOpen={false}>
                                 <Toggle
                                     label={__('Enable Smooth Scroll')}
                                     value={smoothScroll}
@@ -554,7 +554,7 @@ class Edit extends Component {
                                     <div class="qubely-table-of-contents-heading">
                                         <RichText
                                             tagName="div"
-                                            value={title}
+                                            value={__(title, 'qubely')}
                                             className="title"
                                             keepPlaceholderOnFocus
                                             placeholder={__('Add Title')}
